@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔄 Processing Your Attendance Data...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            position: relative;
+            animation: slideIn 0.6s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .header p {
+            color: #718096;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+        
+        .processing-animation {
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .main-emoji {
+            font-size: 5em;
+            animation: bounce 1.5s infinite, rotate 4s infinite linear;
+            display: inline-block;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            40% {
+                transform: translateY(-20px) rotate(5deg);
+            }
+            60% {
+                transform: translateY(-10px) rotate(-5deg);
+            }
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .floating-emojis {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .floating-emoji {
+            position: absolute;
+            font-size: 2em;
+            animation: float 3s infinite ease-in-out;
+            opacity: 0.7;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translateY(-30px) rotate(180deg);
+                opacity: 0.8;
+            }
+        }
+        
+        .progress-container {
+            margin: 30px 0;
+            background: #f1f5f9;
+            border-radius: 25px;
+            padding: 8px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
+            background-size: 200% 100%;
+            height: 20px;
+            border-radius: 20px;
+            width: 0%;
+            transition: width 0.8s ease;
+            animation: shimmer 2s infinite;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: slide 2s infinite;
+        }
+        
+        @keyframes slide {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        
+        .progress-text {
+            margin-top: 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .message {
+            background: #e6f3ff;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 5px solid #667eea;
+            font-size: 1.1em;
+            color: #2d3748;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInMessage 0.5s ease;
+        }
+        
+        @keyframes fadeInMessage {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .stats-preview {
+            display: none;
+            background: #f0fff4;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #38a169;
+            animation: slideUp 0.6s ease;
+        }
+        
+        .stats-preview.show {
+            display: block;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #38a169;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #718096;
+            margin-top: 5px;
+        }
+        
+        .download-section {
+            display: none;
+            margin-top: 30px;
+            animation: celebrateIn 1s ease;
+        }
+        
+        .download-section.show {
+            display: block;
+        }
+        
+        @keyframes celebrateIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) rotate(-180deg);
+            }
+            50% {
+                transform: scale(1.1) rotate(0deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+            color: white;
+            border: none;
+            padding: 18px 35px;
+            border-radius: 50px;
+            font-size: 1.2em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            box-shadow: 0 8px 25px rgba(56, 161, 105, 0.3);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(56, 161, 105, 0.4);
+        }
+        
+        .celebration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .confetti {
+            position: absolute;
+            font-size: 20px;
+            animation: confetti-fall 3s linear infinite;
+        }
+        
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #feb2b2;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+            animation: shakeError 0.5s ease;
+        }
+        
+        @keyframes shakeError {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        
+        .retry-btn {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            margin-top: 15px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .retry-btn:hover {
+            background: #c53030;
+            transform: translateY(-2px);
+        }
+        
+        .upload-another-btn {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+            text-decoration: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            display: inline-block;
+            margin: 15px 10px 0 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(56, 161, 105, 0.3);
+        }
+        
+        .upload-another-btn:hover {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(56, 161, 105, 0.4);
+            text-decoration: none;
+            color: white;
+        }
+        
+        .buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Processing Magic in Progress</h1>
+            <p>Sit back and relax while we transform your data into insights!</p>
+        </div>
+        
+        <div class="processing-animation">
+            <div class="main-emoji" id="mainEmoji">🎭</div>
+            <div class="floating-emojis" id="floatingEmojis"></div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        
+        <div class="progress-text" id="progressText">0%</div>
+        
+        <div class="message" id="statusMessage">
+            🚀 Initializing attendance analyzer...
+        </div>
+        
+        <div class="stats-preview" id="statsPreview">
+            <h3 style="color: #38a169; margin-bottom: 15px;">📊 Analysis Complete!</h3>
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats will be populated by JavaScript -->
+            </div>
+        </div>
+        
+        <div class="download-section" id="downloadSection">
+            <h3 style="color: #38a169; margin-bottom: 20px;">🎉 Your Report is Ready!</h3>
+            <a href="#" id="downloadBtn" class="download-btn">
+                <span>📄</span> Download Attendance Report
+            </a>
+            <p style="margin-top: 15px; color: #718096;">
+                Your detailed PDF report includes subject-wise analysis, student insights, and actionable recommendations.
+            </p>
+            <div class="buttons-container">
+                <a href="/" class="upload-another-btn">
+                    <span>📤</span> Upload Another Excel File
+                </a>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage">
+            <h3>😔 Oops! Something went wrong</h3>
+            <p id="errorText"></p>
+            <button class="retry-btn" onclick="window.location.href='/'">Try Again</button>
+        </div>
+    </div>
+    
+    <div class="celebration" id="celebration"></div>
+    
+    <script>
+        const fileId = '{{ file_id }}';
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const statusMessage = document.getElementById('statusMessage');
+        const statsPreview = document.getElementById('statsPreview');
+        const downloadSection = document.getElementById('downloadSection');
+        const errorMessage = document.getElementById('errorMessage');
+        const mainEmoji = document.getElementById('mainEmoji');
+        const floatingEmojis = document.getElementById('floatingEmojis');
+        
+        const emojis = ['📊', '📈', '📉', '🎯', '🔍', '💡', '⚡', '✨', '🎨', '🚀'];
+        const mainEmojiSequence = ['🎭', '🔍', '🧮', '📊', '🎨', '📄', '🎉'];
+        let currentEmojiIndex = 0;
+        
+        // Create floating emojis
+        function createFloatingEmoji() {
+            const emoji = document.createElement('div');
+            emoji.className = 'floating-emoji';
+            emoji.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            emoji.style.left = Math.random() * 90 + '%';
+            emoji.style.animationDelay = Math.random() * 2 + 's';
+            emoji.style.animationDuration = (2 + Math.random() * 2) + 's';
+            floatingEmojis.appendChild(emoji);
+            
+            setTimeout(() => {
+                if (floatingEmojis.contains(emoji)) {
+                    floatingEmojis.removeChild(emoji);
+                }
+            }, 4000);
+        }
+        
+        // Add floating emojis continuously
+        setInterval(createFloatingEmoji, 600);
+        
+        // Create confetti effect
+        function createConfetti() {
+            const celebration = document.getElementById('celebration');
+            const confettiEmojis = ['🎉', '🎊', '✨', '🌟', '⭐', '💫', '🎈', '🎁'];
+            
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.textContent = confettiEmojis[Math.floor(Math.random() * confettiEmojis.length)];
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.animationDelay = Math.random() * 2 + 's';
+                    confetti.style.animationDuration = (2 + Math.random() * 2) + 's';
+                    celebration.appendChild(confetti);
+                    
+                    setTimeout(() => {
+                        if (celebration.contains(confetti)) {
+                            celebration.removeChild(confetti);
+                        }
+                    }, 5000);
+                }, i * 100);
+            }
+        }
+        
+        // Poll for status updates
+        function pollStatus() {
+            fetch(`/status/${fileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateProgress(data);
+                    
+                    if (data.status === 'processing' || data.status === 'starting') {
+                        setTimeout(pollStatus, 1000);
+                    } else if (data.status === 'completed') {
+                        showCompletion(data);
+                    } else if (data.status === 'error') {
+                        showError(data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    setTimeout(pollStatus, 2000);
+                });
+        }
+        
+        function updateProgress(data) {
+            const progress = data.progress || 0;
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            statusMessage.textContent = data.message || 'Processing...';
+            
+            // Update main emoji based on progress
+            if (progress > 0) {
+                const emojiIndex = Math.floor((progress / 100) * mainEmojiSequence.length);
+                const clampedIndex = Math.min(emojiIndex, mainEmojiSequence.length - 1);
+                if (clampedIndex !== currentEmojiIndex) {
+                    mainEmoji.textContent = mainEmojiSequence[clampedIndex];
+                    currentEmojiIndex = clampedIndex;
+                }
+            }
+        }
+        
+        function showCompletion(data) {
+            // Show stats preview
+            if (data.stats) {
+                const statsGrid = document.getElementById('statsGrid');
+                statsGrid.innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-value">${data.stats.total_students}</div>
+                        <div class="stat-label">Students</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${data.stats.subjects_count}</div>
+                        <div class="stat-label">Subjects</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${data.stats.avg_attendance}</div>
+                        <div class="stat-label">Avg Attendance</div>
+                    </div>
+                `;
+                statsPreview.classList.add('show');
+            }
+            
+            // Show download section
+            if (data.download_url) {
+                document.getElementById('downloadBtn').href = data.download_url;
+                downloadSection.classList.add('show');
+            }
+            
+            // Trigger celebration
+            createConfetti();
+            
+            // Clean up after download
+            setTimeout(() => {
+                fetch(`/cleanup/${fileId}`);
+            }, 30000); // Clean up after 30 seconds
+        }
+        
+        function showError(data) {
+            document.getElementById('errorText').textContent = data.message || 'Unknown error occurred';
+            errorMessage.classList.add('show');
+            mainEmoji.textContent = '😔';
+        }
+        
+        // Start polling immediately
+        pollStatus();
+    </script>
+</body>
+</html>
