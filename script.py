@@ -99,7 +99,11 @@ def read_attendance_data(file_path):
         for col in df.columns:
             if col not in ['Sl_No', 'Reg_No', 'Student_Name', 'Percentage'] and pd.notna(classes_row.get(col, None)):
                 try:
-                    classes_held[col] = int(float(classes_row[col]))
+                    # Convert to string first to handle any format
+                    val_str = str(classes_row[col]).strip()
+                    # Remove percentage sign if present
+                    val_str = val_str.replace('%', '')
+                    classes_held[col] = int(float(val_str))
                 except (ValueError, TypeError):
                     classes_held[col] = 0
     
@@ -122,10 +126,28 @@ def read_attendance_data(file_path):
             except:
                 pass
     
-    # Convert numeric columns
+    # Helper function to clean and convert values (handles percentages)
+    def clean_numeric_value(val):
+        """Convert value to numeric, handling percentages and empty values"""
+        if pd.isna(val) or val == '' or str(val).strip() == '':
+            return np.nan
+        try:
+            # Convert to string and clean
+            val_str = str(val).strip()
+            # Check if it's a percentage format
+            if '%' in val_str:
+                # Remove % and convert to decimal (e.g., "75%" -> 75.0)
+                return float(val_str.replace('%', ''))
+            else:
+                # Just convert to float
+                return float(val_str)
+        except (ValueError, TypeError):
+            return np.nan
+    
+    # Convert numeric columns, handling percentages and empty values
     for col in subject_columns + ['Percentage']:
         if col in df_clean.columns:
-            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+            df_clean[col] = df_clean[col].apply(clean_numeric_value)
     
     return df_clean, classes_held, subject_columns
 
@@ -138,14 +160,95 @@ def calculate_detailed_statistics(df, classes_held, subject_columns):
     
     # Overall statistics
     stats['total_students'] = len(df)
-    stats['avg_attendance'] = df['Percentage'].mean() if 'Percentage' in df.columns else 0
-    stats['highest_attendance'] = df['Percentage'].max() if 'Percentage' in df.columns else 0
-    stats['lowest_attendance'] = df['Percentage'].min() if 'Percentage' in df.columns else 0
+    
+    # Handle overall percentage - check if values need to be converted
+    percentage_column_exists = 'Percentage' in df.columns
+    percentage_has_data = False
+    
+    if percentage_column_exists:
+        # Check if the percentage column has any valid data
+        valid_pct_count = df['Percentage'].notna().sum()
+        percentage_has_data = valid_pct_count > 0
+        
+        if percentage_has_data:
+            max_pct = df['Percentage'].max()
+            
+            # Only check format if we have valid, non-zero data
+            if pd.notna(max_pct) and max_pct > 0:
+                stats['percentage_calculated'] = False  # Using provided data
+                if max_pct <= 1.0:
+                    # Values are in decimal form (e.g., 0.75), no conversion needed
+                    stats['avg_attendance'] = df['Percentage'].mean()
+                    stats['highest_attendance'] = df['Percentage'].max()
+                    stats['lowest_attendance'] = df['Percentage'].min()
+                    threshold_compare = threshold
+                else:
+                    # Values are in percentage form (e.g., 75), convert for display
+                    stats['avg_attendance'] = df['Percentage'].mean() / 100 if pd.notna(df['Percentage'].mean()) else 0
+                    stats['highest_attendance'] = df['Percentage'].max() / 100 if pd.notna(df['Percentage'].max()) else 0
+                    stats['lowest_attendance'] = df['Percentage'].min() / 100 if pd.notna(df['Percentage'].min()) else 0
+                    threshold_compare = threshold * 100
+            else:
+                # All zeros or NaN - treat as no data
+                percentage_has_data = False
+    
+    # If percentage column is empty or doesn't exist, calculate from subject data
+    if not percentage_has_data:
+        print("   ℹ️  Overall percentage column is empty or missing - calculating from subject data...")
+        
+        # Calculate overall percentage for each student from their subject attendance
+        calculated_percentages = []
+        for _, row in df.iterrows():
+            total_attended = 0
+            total_classes = 0
+            
+            for subject in subject_columns:
+                if subject in row and pd.notna(row[subject]):
+                    attended = row[subject]
+                    classes = classes_held.get(subject, 0)
+                    
+                    if classes > 0:
+                        try:
+                            total_attended += float(attended)
+                            total_classes += classes
+                        except (ValueError, TypeError):
+                            pass
+            
+            if total_classes > 0:
+                calculated_percentages.append(total_attended / total_classes)
+            else:
+                calculated_percentages.append(0)
+        
+        if calculated_percentages and any(p > 0 for p in calculated_percentages):
+            # Add calculated percentage to DataFrame
+            df['Percentage'] = calculated_percentages
+            
+            stats['avg_attendance'] = sum(calculated_percentages) / len(calculated_percentages)
+            stats['highest_attendance'] = max(calculated_percentages)
+            stats['lowest_attendance'] = min(calculated_percentages)
+            threshold_compare = threshold
+            percentage_has_data = True
+            stats['percentage_calculated'] = True  # Flag to indicate calculation
+            print(f"   ✅ Calculated overall percentages (Avg: {stats['avg_attendance']:.1%})")
+        else:
+            # No data available at all
+            stats['avg_attendance'] = 0
+            stats['highest_attendance'] = 0
+            stats['lowest_attendance'] = 0
+            threshold_compare = threshold
+            stats['percentage_calculated'] = False
+            print("   ⚠️  No attendance data available to calculate percentages")
     
     # Students with attendance >= threshold
-    if 'Percentage' in df.columns:
-        stats['students_above_threshold'] = len(df[df['Percentage'] >= threshold])
-        stats['students_below_threshold'] = len(df[df['Percentage'] < threshold])
+    if percentage_has_data and 'Percentage' in df.columns:
+        # Filter out NaN values before comparison
+        valid_percentages = df['Percentage'].dropna()
+        if len(valid_percentages) > 0:
+            stats['students_above_threshold'] = len(valid_percentages[valid_percentages >= threshold_compare])
+            stats['students_below_threshold'] = len(valid_percentages[valid_percentages < threshold_compare])
+        else:
+            stats['students_above_threshold'] = 0
+            stats['students_below_threshold'] = stats['total_students']
     else:
         stats['students_above_threshold'] = 0
         stats['students_below_threshold'] = stats['total_students']
@@ -156,12 +259,22 @@ def calculate_detailed_statistics(df, classes_held, subject_columns):
     
     for subject in subject_columns:
         if subject in df.columns:
-            stats['subject_averages'][subject] = df[subject].mean()
+            # Calculate mean, ignoring NaN values
+            subject_mean = df[subject].mean()
             
-            # Calculate attendance rate if classes held info available
-            if subject in classes_held and classes_held[subject] > 0:
-                stats['subject_attendance_rates'][subject] = (df[subject].mean() / classes_held[subject]) * 100
+            # Check if the subject has any valid data
+            if pd.notna(subject_mean):
+                stats['subject_averages'][subject] = subject_mean
+                
+                # Calculate attendance rate if classes held info available
+                if subject in classes_held and classes_held[subject] > 0:
+                    stats['subject_attendance_rates'][subject] = (subject_mean / classes_held[subject]) * 100
+                else:
+                    # If no classes held info, assume the values are already percentages
+                    stats['subject_attendance_rates'][subject] = subject_mean
             else:
+                # No data for this subject
+                stats['subject_averages'][subject] = 0
                 stats['subject_attendance_rates'][subject] = 0
     
     # Individual student analysis
@@ -175,10 +288,39 @@ def calculate_detailed_statistics(df, classes_held, subject_columns):
         else:
             reg_no = str(reg_value).strip()
         
+        # Handle overall percentage
+        overall_pct_value = row.get('Percentage', None)
+        if pd.isna(overall_pct_value) or overall_pct_value == 0:
+            # Calculate from subject data if percentage is missing or zero
+            total_attended = 0
+            total_classes = 0
+            
+            for subject in subject_columns:
+                if subject in row and pd.notna(row[subject]):
+                    attended = row[subject]
+                    classes = classes_held.get(subject, 0)
+                    
+                    if classes > 0:
+                        try:
+                            total_attended += float(attended)
+                            total_classes += classes
+                        except (ValueError, TypeError):
+                            pass
+            
+            if total_classes > 0:
+                overall_pct = total_attended / total_classes
+            else:
+                overall_pct = 0
+        else:
+            # Check if it's in decimal or percentage format
+            overall_pct = float(overall_pct_value)
+            if overall_pct > 1.0:
+                overall_pct = overall_pct / 100  # Convert to decimal
+        
         student_info = {
             'name': row.get('Student_Name', 'Unknown'),
             'reg_no': reg_no,
-            'overall_percentage': row.get('Percentage', 0),
+            'overall_percentage': overall_pct,
             'subjects': {},
             'subjects_below_threshold': [],
             'strengths': [],
@@ -188,18 +330,41 @@ def calculate_detailed_statistics(df, classes_held, subject_columns):
         # Subject-wise analysis for each student
         for subject in subject_columns:
             if subject in row and pd.notna(row[subject]):
-                attended = int(row[subject])
+                attended = row[subject]
                 total_classes = classes_held.get(subject, 0)
                 
+                # Determine if the value is already a percentage or raw attendance
                 if total_classes > 0:
-                    percentage = (attended / total_classes) * 100
-                    student_info['subjects'][subject] = {
-                        'attended': attended,
-                        'total': total_classes,
-                        'percentage': percentage,
-                        'status': 'Good' if percentage >= threshold * 100 else 'Needs Attention'
-                    }
-                    
+                    # We have classes held info, so calculate percentage
+                    try:
+                        attended_int = int(float(attended))
+                        percentage = (attended_int / total_classes) * 100
+                        student_info['subjects'][subject] = {
+                            'attended': attended_int,
+                            'total': total_classes,
+                            'percentage': percentage,
+                            'status': 'Good' if percentage >= threshold * 100 else 'Needs Attention'
+                        }
+                    except (ValueError, TypeError):
+                        # Skip if can't convert to int
+                        continue
+                else:
+                    # No classes held info - assume the value is already a percentage
+                    try:
+                        percentage = float(attended)
+                        student_info['subjects'][subject] = {
+                            'attended': 'N/A',
+                            'total': 'N/A',
+                            'percentage': percentage,
+                            'status': 'Good' if percentage >= threshold * 100 else 'Needs Attention'
+                        }
+                    except (ValueError, TypeError):
+                        # Skip if can't convert to float
+                        continue
+                
+                # Add to tracking lists
+                if subject in student_info['subjects']:
+                    percentage = student_info['subjects'][subject]['percentage']
                     if percentage < threshold * 100:
                         student_info['subjects_below_threshold'].append(subject)
                         student_info['needs_attention'].append(f"{subject}: {percentage:.1f}%")
@@ -276,8 +441,14 @@ def create_detailed_pdf_report(df, classes_held, subject_columns, stats, output_
     elements.append(Spacer(1, 20))
     
     # Report Generation Info
-    report_info = Paragraph(f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br/>"
-                           f"<b>Analysis Threshold:</b> {CONFIG['attendance_threshold']*100:.0f}%", styles['Normal'])
+    report_info_text = f"<b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br/>"
+    report_info_text += f"<b>Analysis Threshold:</b> {CONFIG['attendance_threshold']*100:.0f}%"
+    
+    # Add note if overall percentage was calculated
+    if stats.get('percentage_calculated', False):
+        report_info_text += "<br/><b>Note:</b> Overall percentages calculated from subject-wise attendance (no percentage column in source data)"
+    
+    report_info = Paragraph(report_info_text, styles['Normal'])
     elements.append(report_info)
     elements.append(Spacer(1, 20))
     
@@ -315,9 +486,12 @@ def create_detailed_pdf_report(df, classes_held, subject_columns, stats, output_
     elements.append(Paragraph("CLASSES HELD", heading_style))
     
     classes_data = [['Subject', 'Classes Held']]
-    for subject, count in classes_held.items():
+    for subject in subject_columns:
         subject_name = subject.replace('_', ' ').title()
-        classes_data.append([subject_name, str(count)])
+        count = classes_held.get(subject, 0)
+        # Show N/A if no classes held information available
+        classes_str = str(count) if count > 0 else 'N/A (Percentage format)'
+        classes_data.append([subject_name, classes_str])
     
     classes_table = Table(classes_data, colWidths=[2.5*inch, 1.5*inch])
     classes_table.setStyle(TableStyle([
@@ -345,18 +519,24 @@ def create_detailed_pdf_report(df, classes_held, subject_columns, stats, output_
             classes = classes_held.get(subject, 0)
             attendance_rate = stats['subject_attendance_rates'].get(subject, 0)
             
+            # Skip subjects with no data
+            if avg_attended == 0 and attendance_rate == 0:
+                continue
+            
             # Determine performance status
             if attendance_rate >= threshold_pct:
                 status = "Excellent"
             elif attendance_rate >= threshold_pct * 0.8:
                 status = "Good"
-            else:
+            elif attendance_rate > 0:
                 status = "Needs Focus"
+            else:
+                status = "No Data"
             
             subject_name = subject.replace('_', ' ').title()
             subject_avg_data.append([
                 subject_name,
-                f"{avg_attended:.1f}",
+                f"{avg_attended:.1f}" if avg_attended > 0 else 'N/A',
                 str(classes) if classes > 0 else 'N/A',
                 f"{attendance_rate:.1f}%" if attendance_rate > 0 else 'N/A',
                 status
@@ -415,10 +595,14 @@ def create_detailed_pdf_report(df, classes_held, subject_columns, stats, output_
                 subject_name = subject.replace('_', ' ').title()
                 status = subject_data['status']
                 
+                # Handle N/A values properly
+                attended_str = str(subject_data['attended']) if subject_data['attended'] != 'N/A' else 'N/A'
+                total_str = str(subject_data['total']) if subject_data['total'] != 'N/A' else 'N/A'
+                
                 student_subject_data.append([
                     subject_name,
-                    str(subject_data['attended']),
-                    str(subject_data['total']),
+                    attended_str,
+                    total_str,
                     f"{subject_data['percentage']:.1f}%",
                     status
                 ])
@@ -531,8 +715,26 @@ def main():
                 rate = stats['subject_attendance_rates'][subject]
                 avg = stats['subject_averages'][subject]
                 total = classes_held.get(subject, 0)
-                status = "✅" if rate >= threshold_pct else "⚠️" if rate >= threshold_pct * 0.8 else "❌"
-                print(f"   {status} {subject.replace('_', ' ').title()}: {rate:.1f}% (Avg: {avg:.1f}/{total})")
+                
+                # Skip subjects with no data
+                if avg == 0 and rate == 0:
+                    continue
+                
+                # Determine status icon
+                if rate >= threshold_pct:
+                    status = "✅"
+                elif rate >= threshold_pct * 0.8:
+                    status = "⚠️"
+                elif rate > 0:
+                    status = "❌"
+                else:
+                    status = "ℹ️"
+                
+                # Format output based on whether we have total classes
+                if total > 0:
+                    print(f"   {status} {subject.replace('_', ' ').title()}: {rate:.1f}% (Avg: {avg:.1f}/{total})")
+                else:
+                    print(f"   {status} {subject.replace('_', ' ').title()}: {rate:.1f}%")
         
         print(f"\n📄 OUTPUT:")
         print(f"   • Detailed PDF report: {pdf_output}")

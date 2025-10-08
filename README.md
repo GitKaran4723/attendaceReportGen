@@ -1,6 +1,21 @@
 # 📊 Attendance Analyzer Web App
 
-A **beautiful, fun, and powerful** Flask web application that transforms Excel attendance sheets into comprehensive PDF reports with subject-wise analysis!
+A **beautiful, fun, and powerful** Flask web application that transforms Exc### ✨ "Adding magical finishing touches..."
+
+## 🛡️ Edge Cases Handled
+
+The application now robustly handles various real-world data issues:
+- **Percentage format strings** (e.g., "85%", "90%")
+- **Missing data** (NaN, empty cells)
+- **Mixed data formats** (raw numbers and percentages in the same file)
+- **Empty subjects** (subjects with no data for any student)
+- **Missing registration numbers**
+- **Missing overall percentages**
+- **Subjects without classes held information**
+
+See `EDGE_CASES.md` for detailed documentation on edge case handling.
+
+## 📈 Report Featuresattendance sheets into comprehensive PDF reports with subject-wise analysis!
 
 ## 🚀 Features
 
@@ -9,6 +24,7 @@ A **beautiful, fun, and powerful** Flask web application that transforms Excel a
 - **Dynamic subject detection** - Automatically finds and processes all subject columns
 - **Flexible column handling** - Add new subjects without code changes
 - **Robust data processing** - Handles various Excel layouts and formats
+- **Edge case handling** - Handles percentages, missing data, and mixed formats seamlessly
 
 ### 🎨 **Beautiful User Experience**
 - **Drag & Drop interface** - Modern file upload with visual feedback

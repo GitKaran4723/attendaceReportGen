@@ -184,9 +184,20 @@ flask_session/
 *_backup.*
 *_old.*
 
-# Test files
+# Test files and temporary outputs
 test_*.py
+test_*.xlsx
+test_*.pdf
 *_test.py
 quick_test.*
 script_backup.*
 script_clean.*
+example_before_after.py
+
+# Temporary documentation (keep only main docs)
+BUG_FIX_REPORT.md
+CHANGES.md
+CHECKLIST.md
+FIX_SUMMARY.txt
+SUMMARY.txt
+*_SUMMARY.txt
